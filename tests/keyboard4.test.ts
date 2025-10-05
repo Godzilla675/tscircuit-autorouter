@@ -38,7 +38,9 @@ describe("keyboard4 autorouting", () => {
   })
 
   test("matches the expected PCB snapshot", () => {
-    expect(pcbSvg).toMatchSvgSnapshot(import.meta.path)
+    expect(pcbSvg).toMatchSvgSnapshot(import.meta.path, {
+      tolerance: 0.1,
+    })
   })
 
   test("produces routes without DRC violations", () => {

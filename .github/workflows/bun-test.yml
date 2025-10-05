@@ -23,3 +23,12 @@ jobs:
 
       - name: Run tests
         run: bun test --timeout 60000
+
+      - name: Upload diff PNG and SVG snapshot artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-png-and-snap-svg-artifacts
+          path: |
+            **/*.diff.png
+            **/*.snap.svg

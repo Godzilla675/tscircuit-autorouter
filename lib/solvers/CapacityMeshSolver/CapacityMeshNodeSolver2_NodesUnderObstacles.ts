@@ -31,6 +31,11 @@ interface Target {
 export class CapacityMeshNodeSolver2_NodeUnderObstacle extends CapacityMeshNodeSolver {
   VIA_DIAMETER = 0.6
   OBSTACLE_MARGIN = 0.1
+  /**
+   * The threshold for the percentage of a single-layer node that must be
+   * covered by obstacles to be considered "under an obstacle"
+   */
+  OVERLAP_THRESHOLD_FOR_SINGLE_LAYER_NODES = 0.2 // 20% coverage threshold
 
   constructor(
     public srj: SimpleRouteJson,
@@ -73,6 +78,78 @@ export class CapacityMeshNodeSolver2_NodeUnderObstacle extends CapacityMeshNodeS
       node.center.y + node.height / 2 > this.srj.bounds.maxY
     )
   }
+
+  /**
+   * Calculate the percentage of node area covered by obstacles
+   */
+  getObstacleCoveragePercentage(node: CapacityMeshNode): number {
+    const overlappingObstacles = this.getXYZOverlappingObstacles(node)
+    if (overlappingObstacles.length === 0) return 0
+
+    const nodeLeft = node.center.x - node.width / 2
+    const nodeRight = node.center.x + node.width / 2
+    const nodeTop = node.center.y - node.height / 2
+    const nodeBottom = node.center.y + node.height / 2
+    const nodeArea = node.width * node.height
+
+    let totalOverlapArea = 0
+
+    for (const obstacle of overlappingObstacles) {
+      // Calculate overlap rectangle
+      const overlapLeft = Math.max(
+        nodeLeft,
+        obstacle.center.x - obstacle.width / 2,
+      )
+      const overlapRight = Math.min(
+        nodeRight,
+        obstacle.center.x + obstacle.width / 2,
+      )
+      const overlapTop = Math.max(
+        nodeTop,
+        obstacle.center.y - obstacle.height / 2,
+      )
+      const overlapBottom = Math.min(
+        nodeBottom,
+        obstacle.center.y + obstacle.height / 2,
+      )
+
+      if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
+        const overlapArea =
+          (overlapRight - overlapLeft) * (overlapBottom - overlapTop)
+        totalOverlapArea += overlapArea
+      }
+    }
+
+    return totalOverlapArea / nodeArea
+  }
+
+  /**
+   * Check if a single-layer node should be filtered due to obstacle coverage
+   */
+  shouldFilterSingleLayerNodeForObstacle(node: CapacityMeshNode): boolean {
+    if (node.availableZ.length !== 1) return false
+    if (!node._containsObstacle) return false
+
+    const coveragePercent = this.getObstacleCoveragePercentage(node)
+    return coveragePercent > this.OVERLAP_THRESHOLD_FOR_SINGLE_LAYER_NODES
+  }
+
+  /**
+   * Check if a node should be filtered due to obstacles.
+   * Single-layer nodes: filtered only if >20% covered
+   * Multi-layer nodes: filtered if any overlap
+   */
+  shouldFilterNodeForObstacle(node: CapacityMeshNode): boolean {
+    if (!node._containsObstacle) return false
+
+    if (node.availableZ.length === 1) {
+      return this.shouldFilterSingleLayerNodeForObstacle(node)
+    }
+
+    // Multi-layer nodes: use original behavior (filter if any obstacle)
+    return true
+  }
+
   createChildNodeAtPosition(
     parent: CapacityMeshNode,
     opts: {
@@ -220,7 +297,7 @@ export class CapacityMeshNodeSolver2_NodeUnderObstacle extends CapacityMeshNodeS
         unfinishedNewNodes.push(childNode)
       } else if (
         !shouldBeXYSubdivided &&
-        !childNode._containsObstacle &&
+        !this.shouldFilterNodeForObstacle(childNode) &&
         !shouldBeZSubdivided
       ) {
         finishedNewNodes.push(childNode)
@@ -229,7 +306,7 @@ export class CapacityMeshNodeSolver2_NodeUnderObstacle extends CapacityMeshNodeS
           const zSubNodes = this.getZSubdivisionChildNodes(childNode)
           finishedNewNodes.push(
             ...zSubNodes.filter(
-              (n) => n._containsTarget || !n._containsObstacle,
+              (n) => n._containsTarget || !this.shouldFilterNodeForObstacle(n),
             ),
           )
         } else {
@@ -238,7 +315,7 @@ export class CapacityMeshNodeSolver2_NodeUnderObstacle extends CapacityMeshNodeS
       } else if (shouldBeZSubdivided) {
         finishedNewNodes.push(
           ...this.getZSubdivisionChildNodes(childNode).filter(
-            (zSubNode) => !zSubNode._containsObstacle,
+            (zSubNode) => !this.shouldFilterNodeForObstacle(zSubNode),
           ),
         )
       }
