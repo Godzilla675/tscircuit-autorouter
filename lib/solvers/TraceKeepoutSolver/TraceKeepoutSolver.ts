@@ -20,8 +20,8 @@ import {
 } from "@tscircuit/math-utils"
 import { smoothHdRoutes } from "./smoothLines"
 import { cloneAndShuffleArray } from "lib/utils/cloneAndShuffleArray"
+import { removeSelfIntersections } from "./removeSelfIntersections"
 
-const CURSOR_STEP_DISTANCE = 0.25
 const BOARD_OUTLINE_CONNECTION_NAME = "__board_outline__"
 
 interface Point2D {
@@ -39,7 +39,6 @@ export interface TraceKeepoutSolverInput {
   connMap: ConnectivityMap
   colorMap: Record<string, string>
   keepoutRadiusSchedule?: number[]
-  smoothDistance?: number
   srj?: Pick<SimpleRouteJson, "outline" | "bounds">
 }
 
@@ -56,8 +55,6 @@ export class TraceKeepoutSolver extends BaseSolver {
   originalHdRoutes: HighDensityRoute[]
   hdRoutes: HighDensityRoute[]
   redrawnHdRoutes: HighDensityRoute[] = []
-
-  smoothDistance: number
 
   KEEPOUT_RADIUS_SCHEDULE: number[]
   currentScheduleIndex = 0
@@ -89,11 +86,11 @@ export class TraceKeepoutSolver extends BaseSolver {
     this.originalHdRoutes = [...input.hdRoutes]
 
     // Apply smoothing to routes
-    this.smoothDistance = input.smoothDistance ?? 0.5
-    this.hdRoutes = smoothHdRoutes(input.hdRoutes, this.smoothDistance)
+    // this.hdRoutes = smoothHdRoutes(input.hdRoutes, this.getSmoothDistance())
+    this.hdRoutes = input.hdRoutes
 
     this.KEEPOUT_RADIUS_SCHEDULE = input.keepoutRadiusSchedule ?? [
-      0.5, 0.5, 0.5, 0.5,
+      0.3, 0.5, 0.5, 0.5, 0.5, 1, 1, 1, 1,
     ]
     this.currentKeepoutRadius = this.KEEPOUT_RADIUS_SCHEDULE[0] ?? 0.15
     this.unprocessedRoutes = [...this.hdRoutes]
@@ -147,6 +144,10 @@ export class TraceKeepoutSolver extends BaseSolver {
     }
   }
 
+  getSmoothDistance(): number {
+    return this.currentKeepoutRadius
+  }
+
   _step() {
     // If no current trace, dequeue one
     if (!this.currentTrace) {
@@ -161,7 +162,8 @@ export class TraceKeepoutSolver extends BaseSolver {
           this.currentKeepoutRadius =
             this.KEEPOUT_RADIUS_SCHEDULE[this.currentScheduleIndex]!
           this.unprocessedRoutes = cloneAndShuffleArray(
-            smoothHdRoutes([...this.processedRoutes], this.smoothDistance),
+            [...this.processedRoutes],
+            // smoothHdRoutes([...this.processedRoutes],this.getSmoothDistance())
             this.currentScheduleIndex,
           )
           this.smoothedCursorRoutes = [...this.unprocessedRoutes]
@@ -247,6 +249,10 @@ export class TraceKeepoutSolver extends BaseSolver {
     })
   }
 
+  getStepDistance(): number {
+    return this.currentKeepoutRadius / 2
+  }
+
   /**
    * Steps the cursor forward by CURSOR_STEP_DISTANCE along the trace
    * Returns false if we've reached the end of the trace
@@ -255,7 +261,7 @@ export class TraceKeepoutSolver extends BaseSolver {
     if (!this.currentTrace || !this.cursorPosition) return false
 
     const route = this.currentTrace.route
-    let remainingDistance = CURSOR_STEP_DISTANCE
+    let remainingDistance = this.getStepDistance()
 
     while (remainingDistance > 0) {
       if (this.currentTraceSegmentIndex >= route.length - 1) {
@@ -455,13 +461,16 @@ export class TraceKeepoutSolver extends BaseSolver {
     // Simplify the recorded positions to remove redundant points
     const simplifiedRoute = this.simplifyRoute(this.recordedDrawPositions)
 
+    // Remove any self-intersections from the route
+    const cleanedRoute = removeSelfIntersections(simplifiedRoute)
+
     // Create the redrawn trace
     const redrawnTrace: HighDensityRoute = {
       connectionName: this.currentTrace.connectionName,
       rootConnectionName: this.currentTrace.rootConnectionName,
       traceThickness: this.currentTrace.traceThickness,
       viaDiameter: this.currentTrace.viaDiameter,
-      route: simplifiedRoute,
+      route: cleanedRoute,
       vias: [...this.currentTrace.vias], // Keep vias unchanged
     }
 
@@ -588,7 +597,7 @@ export class TraceKeepoutSolver extends BaseSolver {
       rects: [],
       circles: [],
       coordinateSystem: "cartesian",
-      title: `Trace Keepout Solver (radius: ${this.currentKeepoutRadius.toFixed(2)}, smooth: ${this.smoothDistance.toFixed(2)}mm)`,
+      title: `Trace Keepout Solver (radius: ${this.currentKeepoutRadius.toFixed(2)})`,
     }
 
     for (const route of this.originalHdRoutes) {

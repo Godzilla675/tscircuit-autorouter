@@ -37,6 +37,7 @@ import { NetToPointPairsSolver2_OffBoardConnection } from "../../solvers/NetToPo
 import { RectDiffPipeline } from "@tscircuit/rectdiff"
 import { TraceSimplificationSolver } from "../../solvers/TraceSimplificationSolver/TraceSimplificationSolver"
 import { TraceKeepoutSolver } from "../../solvers/TraceKeepoutSolver/TraceKeepoutSolver"
+import { TraceWidthSolver } from "../../solvers/TraceWidthSolver/TraceWidthSolver"
 import { AvailableSegmentPointSolver } from "../../solvers/AvailableSegmentPointSolver/AvailableSegmentPointSolver"
 import {
   PortPointPathingSolver,
@@ -107,6 +108,7 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
   deadEndSolver?: DeadEndSolver
   traceSimplificationSolver?: TraceSimplificationSolver
   traceKeepoutSolver?: TraceKeepoutSolver
+  traceWidthSolver?: TraceWidthSolver
   availableSegmentPointSolver?: AvailableSegmentPointSolver
   portPointPathingSolver?: PortPointPathingSolver
   multiSectionPortPointOptimizer?: MultiSectionPortPointOptimizer
@@ -354,6 +356,17 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
         srj: cms.srj,
       },
     ]),
+    definePipelineStep("traceWidthSolver", TraceWidthSolver, (cms) => [
+      {
+        hdRoutes: cms.traceKeepoutSolver?.redrawnHdRoutes ?? [],
+        obstacles: cms.srj.obstacles,
+        connMap: cms.connMap,
+        colorMap: cms.colorMap,
+        nominalTraceWidth: cms.srj.nominalTraceWidth,
+        minTraceWidth: cms.minTraceWidth,
+        obstacleMargin: cms.srj.defaultObstacleMargin ?? 0.15,
+      },
+    ]),
   ]
 
   constructor(
@@ -461,6 +474,7 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
     const highDensityStitchViz = this.highDensityStitchSolver?.visualize()
     const traceSimplificationViz = this.traceSimplificationSolver?.visualize()
     const traceKeepoutViz = this.traceKeepoutSolver?.visualize()
+    const traceWidthViz = this.traceWidthSolver?.visualize()
     const problemOutline = this.srj.outline
     const problemLines: Line[] = []
 
@@ -548,6 +562,7 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
       highDensityStitchViz,
       traceSimplificationViz,
       traceKeepoutViz,
+      traceWidthViz,
       this.solved
         ? combineVisualizations(
             problemViz,
@@ -614,6 +629,7 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
 
   _getOutputHdRoutes(): HighDensityRoute[] {
     return (
+      this.traceWidthSolver?.hdRoutesWithWidths ??
       this.traceKeepoutSolver?.redrawnHdRoutes ??
       this.traceSimplificationSolver?.simplifiedHdRoutes ??
       this.highDensityStitchSolver?.mergedHdRoutes ??
