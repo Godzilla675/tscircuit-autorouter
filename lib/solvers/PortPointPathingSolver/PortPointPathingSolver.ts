@@ -8,7 +8,7 @@ import type {
 import type { GraphicsObject } from "graphics-debug"
 import { distance } from "@tscircuit/math-utils"
 import { calculateNodeProbabilityOfFailure } from "../UnravelSolver/calculateCrossingProbabilityOfFailure"
-import { getIntraNodeCrossings } from "../../utils/getIntraNodeCrossings"
+import { getIntraNodeCrossingsUsingCircle } from "../../utils/getIntraNodeCrossingsUsingCircle"
 import type {
   PortPoint,
   NodeWithPortPoints,
@@ -24,6 +24,7 @@ import {
   clonePrecomputedMutableParams,
 } from "./precomputeSharedParams"
 import { getConnectionsWithNodes as getConnectionsWithNodesShared } from "./getConnectionsWithNodes"
+import { getIntraNodeCrossings } from "lib/utils/getIntraNodeCrossings"
 
 export interface PortPointPathingHyperParameters {
   SHUFFLE_SEED?: number
@@ -236,11 +237,11 @@ export class PortPointPathingSolver extends BaseSolver {
   MAX_CANDIDATES_IN_MEMORY = 1000
 
   get MAX_ITERATIONS_PER_PATH() {
-    return this.hyperParameters.MAX_ITERATIONS_PER_PATH ?? 500
+    return this.hyperParameters.MAX_ITERATIONS_PER_PATH ?? 1000
   }
 
-  ITERATIONS_PER_MM_FOR_PATH = 5
-  BASE_ITERATIONS_PER_PATH = 20
+  ITERATIONS_PER_MM_FOR_PATH = 20
+  BASE_ITERATIONS_PER_PATH = 80
 
   get MIN_ALLOWED_BOARD_SCORE() {
     return this.hyperParameters.MIN_ALLOWED_BOARD_SCORE ?? -10000
@@ -495,7 +496,7 @@ export class PortPointPathingSolver extends BaseSolver {
       node,
       additionalPortPoints,
     )
-    const crossings = getIntraNodeCrossings(nodeWithPortPoints)
+    const crossings = getIntraNodeCrossingsUsingCircle(nodeWithPortPoints)
 
     return calculateNodeProbabilityOfFailure(
       this.capacityMeshNodeMap.get(node.capacityMeshNodeId)!,
@@ -1217,7 +1218,7 @@ export class PortPointPathingSolver extends BaseSolver {
       return
     }
 
-    // Mark current port point as visited immediately (Fix B: mark visited early)
+    // Mark current port point as visited immediately
     if (currentCandidate.portPoint && this.visitedPortPoints) {
       const visitedKey = this.getVisitedPortPointKey(
         currentCandidate.portPoint.portPointId,
@@ -1313,6 +1314,8 @@ export class PortPointPathingSolver extends BaseSolver {
       ) {
         continue
       }
+
+      if (this.visitedPortPoints?.has(portPoint.portPointId)) continue
 
       // Get the node we'd enter via this port point
       const nextNodeId = this.getOtherNodeId(
