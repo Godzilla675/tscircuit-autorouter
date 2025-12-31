@@ -1,187 +1,48 @@
-import type { HighDensitySolvabilityDiagnostics } from "lib/utils/isHighDensityNodeSolvable"
+import { getIntraNodeCrossings } from "lib/utils/getIntraNodeCrossings"
 
-interface MetricsCardProps {
-  totalConnections: number
-  layerChanges: number
-  capacity: string
-  probabilityOfFailure: string
-  diagnostics: HighDensitySolvabilityDiagnostics
+type MetricsCardProps = ReturnType<typeof getIntraNodeCrossings> & {
+  probabilityOfFailure: number
 }
 
 export function MetricsCard(props: MetricsCardProps) {
   const {
-    totalConnections,
-    layerChanges,
-    capacity,
-    probabilityOfFailure,
-    diagnostics,
+    numEntryExitLayerChanges,
+    numSameLayerCrossings,
+    numTransitionPairCrossings,
   } = props
 
-  return (
-    <foreignObject x="20" y="20" width="260" height="400">
-      <div
-        style={{
-          backgroundColor: "rgba(30, 41, 59, 0.95)",
-          border: "1px solid #60a5fa",
-          borderRadius: "8px",
-          padding: "12px",
-          color: "white",
-          fontFamily: "monospace",
-          fontSize: "12px",
-        }}
-      >
-        <div
-          style={{
-            fontWeight: "bold",
-            marginBottom: "8px",
-            color: "#60a5fa",
-          }}
-        >
-          Node Metrics
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div>
-            <span style={{ color: "#94a3b8" }}>Connections:</span>{" "}
-            <span style={{ fontWeight: "bold" }}>{totalConnections}</span>
-          </div>
-          <div>
-            <span style={{ color: "#94a3b8" }}>Layer Changes:</span>{" "}
-            <span style={{ fontWeight: "bold" }}>{layerChanges}</span>
-          </div>
-          <div>
-            <span style={{ color: "#94a3b8" }}>Capacity:</span>{" "}
-            <span style={{ fontWeight: "bold" }}>{capacity}</span>
-          </div>
-          <div>
-            <span style={{ color: "#94a3b8" }}>Fail Prob:</span>{" "}
-            <span
-              style={{
-                fontWeight: "bold",
-                color:
-                  Number(probabilityOfFailure) > 80
-                    ? "#ef4444"
-                    : Number(probabilityOfFailure) > 50
-                      ? "#f97316"
-                      : "#22c55e",
-              }}
-            >
-              {probabilityOfFailure}%
-            </span>
-          </div>
-          <div>
-            <span style={{ color: "#94a3b8" }}>Solvable:</span>{" "}
-            <span
-              style={{
-                fontWeight: "bold",
-                color: diagnostics.isSolvable ? "#22c55e" : "#ef4444",
-              }}
-            >
-              {diagnostics.isSolvable ? "YES" : "NO"}
-            </span>
-          </div>
+  const crossingMetrics = [
+    {
+      label: "Same Layer (XSame)",
+      value: numSameLayerCrossings.toString(),
+    },
+    {
+      label: "Entry/Exit Changes (XLC) ",
+      value: numEntryExitLayerChanges.toString(),
+    },
+    {
+      label: "Transition Crossings (XTransition)",
+      value: numTransitionPairCrossings.toString(),
+    },
+    {
+      label: "Probability of Failure",
+      value: props.probabilityOfFailure.toFixed(4),
+    },
+  ]
 
-          {/* Show detailed diagnostics when not solvable */}
-          {!diagnostics.isSolvable && (
+  return (
+    <foreignObject x="20" y="20" width="260" height="250">
+      <div className="bg-gray-900/90 text-white rounded-2xl border border-white/10 shadow-xl p-4 w-full h-full flex flex-col">
+        <div className="mt-2 space-y-2">
+          {crossingMetrics.map((metric) => (
             <div
-              style={{
-                borderTop: "1px solid #475569",
-                marginTop: "8px",
-                paddingTop: "8px",
-                maxHeight: "120px",
-                overflowY: "auto",
-              }}
+              key={metric.label}
+              className="flex items-center justify-between bg-white/5 rounded-xl px-3 py-2"
             >
-              <div
-                style={{
-                  fontWeight: "bold",
-                  marginBottom: "6px",
-                  color: "#ef4444",
-                }}
-              >
-                Why Not Solvable:
-              </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-              >
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Port Overlaps:</span>{" "}
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color:
-                        diagnostics.numOverlaps > 0 ? "#ef4444" : "#22c55e",
-                    }}
-                  >
-                    {diagnostics.numOverlaps}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Crossings:</span>{" "}
-                  <span style={{ fontWeight: "bold" }}>
-                    {diagnostics.totalCrossings} (
-                    {diagnostics.numConnectionsWithCrossings} conn)
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Vias Needed:</span>{" "}
-                  <span style={{ fontWeight: "bold" }}>
-                    {diagnostics.totalViasNeeded}
-                    {diagnostics.effectiveViasUsed <
-                      diagnostics.totalViasNeeded &&
-                      ` (capped at ${diagnostics.effectiveViasUsed})`}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Span Needed:</span>{" "}
-                  <span style={{ fontWeight: "bold" }}>
-                    {diagnostics.requiredSpan.toFixed(2)} mm
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Width:</span>{" "}
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color:
-                        diagnostics.nodeWidth >= diagnostics.requiredSpan
-                          ? "#22c55e"
-                          : "#ef4444",
-                    }}
-                  >
-                    {diagnostics.nodeWidth.toFixed(2)} mm
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Height:</span>{" "}
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color:
-                        diagnostics.nodeHeight >= diagnostics.requiredSpan
-                          ? "#22c55e"
-                          : "#ef4444",
-                    }}
-                  >
-                    {diagnostics.nodeHeight.toFixed(2)} mm
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: "#94a3b8" }}>Best Fit:</span>{" "}
-                  <span style={{ fontWeight: "bold" }}>
-                    {(
-                      (diagnostics.requiredSpan /
-                        Math.max(
-                          diagnostics.nodeWidth,
-                          diagnostics.nodeHeight,
-                        )) *
-                      100
-                    ).toFixed(0)}
-                    %
-                  </span>
-                </div>
-              </div>
+              <span className="text-sm text-gray-300">{metric.label}</span>
+              <span className="text-lg font-semibold">{metric.value}</span>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </foreignObject>
