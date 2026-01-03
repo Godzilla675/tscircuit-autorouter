@@ -29,45 +29,25 @@ import { CapacityMeshEdgeSolver2_NodeTreeOptimization } from "../CapacityMeshSol
 import { getConnectivityMapFromSimpleRouteJson } from "../../utils/getConnectivityMapFromSimpleRouteJson"
 import { getColorMap } from "../colors"
 import { RelateNodesToOffBoardConnectionsSolver } from "../../autorouter-pipelines/AssignableAutoroutingPipeline2/RelateNodesToOffBoardConnectionsSolver"
-import { updateConnMapWithOffboardObstacleConnections } from "../../autorouter-pipelines/AssignableAutoroutingPipeline2/updateConnMapWithOffboardObstacleConnections"
 import {
   alternatingGrid,
   type PatternResult,
   type PrepatternJumper,
 } from "./patterns/alternatingGrid"
+import { staggeredGrid } from "./patterns/staggeredGrid"
+import { JumperFootprint, JUMPER_DIMENSIONS } from "lib/utils/jumperSizes"
+import { RemoveUnnecessaryJumpersSolver } from "./RemoveUnnecessaryJumpersSolver"
+import { processPathingSolverResults } from "./processPathingSolverResults"
 
-/**
- * 0603 footprint dimensions in mm
- * 0.8mm x 0.95mm pads, 1.65mm center-to-center
- */
-const JUMPER_0603 = {
-  length: 1.65,
-  width: 0.95,
-  padLength: 0.8,
-  padWidth: 0.95,
-}
-
-/**
- * 1206 footprint dimensions in mm
- * Actual 1206: 3.2mm x 1.6mm
- */
-const JUMPER_1206 = {
-  length: 3.2,
-  width: 1.6,
-  padLength: 0.6,
-  padWidth: 1.6,
-}
-
-const JUMPER_DIMENSIONS: Record<JumperFootprint, typeof JUMPER_0603> = {
-  "0603": JUMPER_0603,
-  "1206": JUMPER_1206,
-}
-
-type JumperFootprint = "0603" | "1206"
+export type PatternType = "alternating_grid" | "staggered_grid"
 
 export interface JumperPrepatternSolverHyperParameters {
-  /** 0 = horizontal first, 1 = vertical first */
+  /** Orientation of jumpers - "horizontal" or "vertical" */
   FIRST_ORIENTATION?: "horizontal" | "vertical"
+  /** Jumper footprint size - defaults to "0603" */
+  JUMPER_FOOTPRINT?: JumperFootprint
+  /** Pattern type for jumper placement - defaults to "alternating_grid" */
+  PATTERN_TYPE?: PatternType
 }
 
 export interface JumperPrepatternSolverParams {
@@ -134,6 +114,7 @@ export class JumperPrepatternSolver extends BaseSolver {
   availableSegmentPointSolver?: AvailableSegmentPointSolver
   portPointPathingSolver?: HyperPortPointPathingSolver
   multiSectionPortPointOptimizer?: MultiSectionPortPointOptimizer
+  removeUnnecessaryJumpersSolver?: RemoveUnnecessaryJumpersSolver
   highDensitySolver?: SimpleHighDensitySolver
   highDensityStitchSolver?: MultipleHighDensityRouteStitchSolver
 
@@ -146,6 +127,14 @@ export class JumperPrepatternSolver extends BaseSolver {
 
   // Output
   solvedRoutes: HighDensityIntraNodeRouteWithJumpers[] = []
+
+  // Tracks which jumper off-board connection net IDs are NECESSARY (visualized)
+  usedJumperOffBoardObstacleIds: Set<string> = new Set()
+  // Tracks ALL jumper off-board connection net IDs that are USED (not removed)
+  // This includes both necessary and unnecessary-but-used jumpers
+  allUsedJumperOffBoardIds: Set<string> = new Set()
+  // Connectivity map for off-board obstacles (built once for checking used jumpers)
+  offBoardConnMap: ConnectivityMap | null = null
 
   pipelineDef = [
     definePipelineStep(
@@ -255,7 +244,7 @@ export class JumperPrepatternSolver extends BaseSolver {
             inputNodes,
             capacityMeshNodes: solver.capacityNodes,
             colorMap: solver.colorMap,
-            numShuffleSeeds: 100,
+            numShuffleSeeds: 10,
             hyperParameters: {
               NODE_PF_FACTOR: 100,
               NODE_PF_MAX_PENALTY: 100,
@@ -265,6 +254,7 @@ export class JumperPrepatternSolver extends BaseSolver {
               FORCE_CENTER_FIRST: true,
               RIPPING_ENABLED: true,
               RIPPING_PF_THRESHOLD: 0.3,
+              RANDOM_RIP_FRACTION: 0.1,
               MAX_RIPS: 1000,
             },
           } as HyperPortPointPathingSolverParams,
@@ -274,12 +264,18 @@ export class JumperPrepatternSolver extends BaseSolver {
         onSolved: (solver) => {
           const pathingSolver = solver.portPointPathingSolver
           if (!pathingSolver) return
-          updateConnMapWithOffboardObstacleConnections({
+
+          const result = processPathingSolverResults({
+            pathingSolver,
             connMap: solver.connMap,
-            connectionsWithResults: pathingSolver.connectionsWithResults,
-            inputNodes: pathingSolver.inputNodes,
-            obstacles: solver.srjWithPointPairs.obstacles,
+            prepatternJumpers: solver.prepatternJumpers,
+            srjWithPointPairs: solver.srjWithPointPairs,
           })
+
+          solver.offBoardConnMap = result.offBoardConnMap
+          solver.usedJumperOffBoardObstacleIds =
+            result.usedJumperOffBoardObstacleIds
+          solver.allUsedJumperOffBoardIds = result.allUsedJumperOffBoardIds
         },
       },
     ),
@@ -303,6 +299,27 @@ export class JumperPrepatternSolver extends BaseSolver {
     //     ]
     //   },
     // ),
+    definePipelineStep(
+      "removeUnnecessaryJumpersSolver",
+      RemoveUnnecessaryJumpersSolver,
+      (solver) => [
+        {
+          inputNodes: solver.inputNodes,
+          // Pass allUsedJumperOffBoardIds to only remove truly unused jumpers
+          // (jumpers that are used but not necessary keep their off-board connections)
+          usedJumperOffBoardObstacleIds: solver.allUsedJumperOffBoardIds,
+          offBoardConnMap: solver.offBoardConnMap,
+        },
+      ],
+      {
+        onSolved: (solver) => {
+          // Update inputNodes with the nodes that have unused jumpers removed
+          solver.inputNodes =
+            solver.removeUnnecessaryJumpersSolver?.getOutput() ??
+            solver.inputNodes
+        },
+      },
+    ),
     definePipelineStep(
       "highDensitySolver",
       SimpleHighDensitySolver,
@@ -344,12 +361,19 @@ export class JumperPrepatternSolver extends BaseSolver {
     this.nodeWithPortPoints = params.nodeWithPortPoints
     this.colorMap = params.colorMap ?? {}
     this.traceWidth = params.traceWidth ?? 0.15
-    this.jumperFootprint = params.jumperFootprint ?? "0603"
     this.hyperParameters = params.hyperParameters ?? {}
+    // Use hyperparameter for jumper footprint, fall back to params, then default to "0603"
+    this.jumperFootprint =
+      this.hyperParameters.JUMPER_FOOTPRINT ?? params.jumperFootprint ?? "0603"
     this.MAX_ITERATIONS = 1e6
 
     // Generate jumpers using the pattern function (before creating SimpleRouteJson since it needs the obstacles)
-    this.patternResult = alternatingGrid(this)
+    const patternType = this.hyperParameters.PATTERN_TYPE ?? "alternating_grid"
+    if (patternType === "staggered_grid") {
+      this.patternResult = staggeredGrid(this)
+    } else {
+      this.patternResult = alternatingGrid(this)
+    }
     this.prepatternJumpers = this.patternResult.prepatternJumpers
 
     // Initialize data before pipeline starts
@@ -598,7 +622,33 @@ export class JumperPrepatternSolver extends BaseSolver {
       })
     }
 
-    for (const jumper of this.prepatternJumpers) {
+    // Only draw jumpers that are used (if portPointPathingSolver has run)
+    // After routing completes, usedJumperOffBoardObstacleIds contains net IDs of used jumpers
+    const hasRunPathing = this.portPointPathingSolver?.solved
+    const jumpersToVisualize = hasRunPathing
+      ? this.prepatternJumpers.filter((jumper) => {
+          // Check if the jumper's offBoardConnectionId maps to a used net ID
+          if (this.offBoardConnMap) {
+            const jumperNet = this.offBoardConnMap.getNetConnectedToId(
+              jumper.offBoardConnectionId,
+            )
+            // The usedJumperOffBoardObstacleIds contains net IDs directly
+            if (
+              jumperNet &&
+              this.usedJumperOffBoardObstacleIds.has(jumperNet)
+            ) {
+              return true
+            }
+            return false
+          }
+          // Fallback to direct match if no connectivity map
+          return this.usedJumperOffBoardObstacleIds.has(
+            jumper.offBoardConnectionId,
+          )
+        })
+      : this.prepatternJumpers
+
+    for (const jumper of jumpersToVisualize) {
       this._drawJumperPads(graphics, jumper, "rgba(128, 128, 128, 0.5)")
     }
 
