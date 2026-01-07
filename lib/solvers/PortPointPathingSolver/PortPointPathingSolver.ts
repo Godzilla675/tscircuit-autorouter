@@ -6,7 +6,7 @@ import type {
   SimpleRouteJson,
 } from "../../types"
 import { mergeGraphics, type GraphicsObject, type Line } from "graphics-debug"
-import { distance } from "@tscircuit/math-utils"
+import { distance, pointToSegmentDistance } from "@tscircuit/math-utils"
 import { calculateNodeProbabilityOfFailure } from "../UnravelSolver/calculateCrossingProbabilityOfFailure"
 import { getIntraNodeCrossingsUsingCircle } from "../../utils/getIntraNodeCrossingsUsingCircle"
 import type {
@@ -56,6 +56,9 @@ export interface PortPointPathingHyperParameters {
 
   /** When enabled, use jumper-based pf calculation for same-layer crossings on single layer nodes */
   JUMPER_PF_FN_ENABLED?: boolean
+
+  /** Factor for penalizing deviation from straight line path */
+  STRAIGHT_LINE_DEVIATION_PENALTY_FACTOR?: number
 }
 
 /**
@@ -238,6 +241,10 @@ export class PortPointPathingSolver extends BaseSolver {
   /** Penalty factor for port points that are far from the center of the segment */
   get CENTER_OFFSET_DIST_PENALTY_FACTOR() {
     return this.hyperParameters.CENTER_OFFSET_DIST_PENALTY_FACTOR ?? 0
+  }
+
+  get STRAIGHT_LINE_DEVIATION_PENALTY_FACTOR() {
+    return this.hyperParameters.STRAIGHT_LINE_DEVIATION_PENALTY_FACTOR ?? 0
   }
 
   colorMap: Record<string, string>
@@ -788,8 +795,24 @@ export class PortPointPathingSolver extends BaseSolver {
       this.CENTER_OFFSET_DIST_PENALTY_FACTOR *
       point.distToCentermostPortOnZ ** 2
 
+    let straightLineDeviationPenalty = 0
+    if (
+      this.STRAIGHT_LINE_DEVIATION_PENALTY_FACTOR > 0 &&
+      this.currentConnection
+    ) {
+      const startPoint = this.currentConnection.connection.pointsToConnect[0]
+      const endPoint = this.currentConnection.connection.pointsToConnect[1]
+      const deviation = pointToSegmentDistance(point, startPoint, endPoint)
+      straightLineDeviationPenalty =
+        this.STRAIGHT_LINE_DEVIATION_PENALTY_FACTOR * deviation
+    }
+
     return (
-      distanceToGoal + estStepCost + memRiskForHop + centerOffsetDistPenalty
+      distanceToGoal +
+      estStepCost +
+      memRiskForHop +
+      centerOffsetDistPenalty +
+      straightLineDeviationPenalty
     )
   }
 
