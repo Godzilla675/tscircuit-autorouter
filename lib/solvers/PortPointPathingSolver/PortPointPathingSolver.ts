@@ -25,6 +25,8 @@ import {
 } from "./precomputeSharedParams"
 import { getConnectionsWithNodes as getConnectionsWithNodesShared } from "./getConnectionsWithNodes"
 import { getIntraNodeCrossings } from "lib/utils/getIntraNodeCrossings"
+import { computeSectionScoreWithJumpers } from "../MultiSectionPortPointOptimizer/computeSectionScoreWithJumpers"
+import { calculateNodeProbabilityOfFailureWithJumpers } from "../MultiSectionPortPointOptimizer/calculateNodeProbabilityOfFailureWithJumpers"
 
 export interface PortPointPathingHyperParameters {
   SHUFFLE_SEED?: number
@@ -498,6 +500,12 @@ export class PortPointPathingSolver extends BaseSolver {
 
   computeBoardScore(): number {
     const allNodesWithPortPoints = this.getNodesWithPortPoints()
+    if (this.JUMPER_PF_FN_ENABLED) {
+      return computeSectionScoreWithJumpers(
+        allNodesWithPortPoints,
+        this.capacityMeshNodeMap,
+      )
+    }
     return computeSectionScore(allNodesWithPortPoints, this.capacityMeshNodeMap)
   }
 
@@ -591,10 +599,10 @@ export class PortPointPathingSolver extends BaseSolver {
 
     // Use jumper-based pf calculation for single layer nodes when enabled
     if (this.JUMPER_PF_FN_ENABLED && node.availableZ.length === 1) {
-      const nodeArea = node.width * node.height
-      const jumpersWeCanFitInNode = nodeArea * this.jumpersPerMmSquared
-      const estimatedRequiredJumpers = crossings.numSameLayerCrossings
-      return Math.min(1, estimatedRequiredJumpers / jumpersWeCanFitInNode)
+      return calculateNodeProbabilityOfFailureWithJumpers(
+        this.capacityMeshNodeMap.get(node.capacityMeshNodeId)!,
+        crossings.numSameLayerCrossings,
+      )
     }
 
     return calculateNodeProbabilityOfFailure(
@@ -1752,8 +1760,7 @@ export class PortPointPathingSolver extends BaseSolver {
 
     for (const nodeId of nodeIds) {
       // Stop if solver already failed (e.g., MAX_RIPS exceeded)
-      if (this.failed) return
-
+      if (this.totalRipCount > this.MAX_RIPS) break
       const node = this.nodeMap.get(nodeId)
       if (!node) continue
 
@@ -1844,7 +1851,7 @@ export class PortPointPathingSolver extends BaseSolver {
 
     // Rip the selected number of connections
     for (let i = 0; i < numToRip && i < shuffled.length; i++) {
-      if (this.failed) return // Stop if MAX_RIPS exceeded
+      if (this.totalRipCount > this.MAX_RIPS) break // Stop if MAX_RIPS exceeded
 
       const connResult = shuffled[i]
       this.ripConnection(connResult)
