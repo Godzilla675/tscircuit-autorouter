@@ -6,13 +6,16 @@ import type {
 import type { GraphicsObject } from "graphics-debug"
 import { BaseSolver } from "../../solvers/BaseSolver"
 import { SimpleHighDensitySolver } from "./SimpleHighDensitySolver"
-import { HyperIntraNodeSolverWithJumpers } from "../../solvers/HighDensitySolver/HyperIntraNodeSolverWithJumpers"
+// import { HyperIntraNodeSolverWithJumpers } from "../../solvers/HighDensitySolver/HyperIntraNodeSolverWithJumpers"
+// import { JumperPrepatternSolver2_HyperGraph } from "../../solvers/JumperPrepatternSolver/JumperPrepatternSolver2_HyperGraph"
+import { HyperJumperPrepatternSolver2 } from "../../solvers/JumperPrepatternSolver/HyperJumperPrepatternSolver2"
 import { getIntraNodeCrossings } from "../../utils/getIntraNodeCrossings"
 import { safeTransparentize } from "../../solvers/colors"
 import { mergeRouteSegments } from "lib/utils/mergeRouteSegments"
 import { ConnectivityMap } from "circuit-json-to-connectivity-map"
 import { HighDensityHyperParameters } from "../../solvers/HighDensitySolver/HighDensityHyperParameters"
 import { getIntraNodeCrossingsUsingCircle } from "lib/utils/getIntraNodeCrossingsUsingCircle"
+import { JUMPER_DIMENSIONS } from "../../utils/jumperSizes"
 
 /**
  * A unified route type that can represent both regular routes (with vias)
@@ -72,7 +75,9 @@ export class JumperHighDensitySolver extends BaseSolver {
 
   // Sub-solvers
   simpleHighDensitySolver?: SimpleHighDensitySolver
-  jumperSolvers: HyperIntraNodeSolverWithJumpers[]
+  // jumperSolvers: HyperIntraNodeSolverWithJumpers[]
+  // jumperSolvers: JumperPrepatternSolver2_HyperGraph[]
+  jumperSolvers: HyperJumperPrepatternSolver2[]
   currentJumperSolverIndex: number
 
   // State
@@ -217,16 +222,27 @@ export class JumperHighDensitySolver extends BaseSolver {
 
   _initializeJumperSolvers() {
     for (const node of this.nodesWithCrossings) {
-      const solver = new HyperIntraNodeSolverWithJumpers({
+      // Old solver (commented out):
+      // const solver = new HyperIntraNodeSolverWithJumpers({
+      //   nodeWithPortPoints: node,
+      //   colorMap: this.colorMap,
+      //   connMap: this.connMap,
+      //   traceWidth: this.traceWidth,
+      //   hyperParameters: {
+      //     ...this.hyperParameters,
+      //     FUTURE_CONNECTION_PROXIMITY_VD: 50,
+      //     FUTURE_CONNECTION_PROX_TRACE_PENALTY_FACTOR: 1,
+      //   },
+      // })
+
+      // HyperJumperPrepatternSolver2 tries multiple variants:
+      // - single_1206x4 + vertical/horizontal
+      // - 2x2_1206x4 + vertical/horizontal (if node >= 14mm)
+      const solver = new HyperJumperPrepatternSolver2({
         nodeWithPortPoints: node,
         colorMap: this.colorMap,
-        connMap: this.connMap,
         traceWidth: this.traceWidth,
-        hyperParameters: {
-          ...this.hyperParameters,
-          FUTURE_CONNECTION_PROXIMITY_VD: 50,
-          FUTURE_CONNECTION_PROX_TRACE_PENALTY_FACTOR: 1,
-        },
+        connMap: this.connMap,
       })
       this.jumperSolvers.push(solver)
     }
@@ -262,7 +278,10 @@ export class JumperHighDensitySolver extends BaseSolver {
         this.solved = true
       }
     } else if (currentSolver.failed) {
-      this.error = `HyperIntraNodeSolverWithJumpers failed for node: ${currentSolver.nodeWithPortPoints.capacityMeshNodeId}: ${currentSolver.error}`
+      // Old error message (for HyperIntraNodeSolverWithJumpers):
+      // this.error = `HyperIntraNodeSolverWithJumpers failed for node: ${currentSolver.nodeWithPortPoints.capacityMeshNodeId}: ${currentSolver.error}`
+      // this.error = `JumperPrepatternSolver2_HyperGraph failed for node: ${currentSolver.nodeWithPortPoints.capacityMeshNodeId}: ${currentSolver.error}`
+      this.error = `HyperJumperPrepatternSolver2 failed for node: ${currentSolver.nodeWithPortPoints.capacityMeshNodeId}: ${currentSolver.error}`
       this.failed = true
     }
   }
@@ -368,14 +387,16 @@ export class JumperHighDensitySolver extends BaseSolver {
         for (const jumper of route.jumpers) {
           const color = this.colorMap[route.connectionName] ?? "gray"
 
+          // Get dimensions based on jumper footprint (default to 1206 for hypergraph solver)
+          const footprint = jumper.footprint ?? "1206"
+          const dims = JUMPER_DIMENSIONS[footprint]
+
           // Determine jumper orientation to rotate pad dimensions
           const dx = jumper.end.x - jumper.start.x
           const dy = jumper.end.y - jumper.start.y
           const isHorizontal = Math.abs(dx) > Math.abs(dy)
-          const padLength = 0.8
-          const padWidth = 0.95
-          const rectWidth = isHorizontal ? padLength : padWidth
-          const rectHeight = isHorizontal ? padWidth : padLength
+          const rectWidth = isHorizontal ? dims.padLength : dims.padWidth
+          const rectHeight = isHorizontal ? dims.padWidth : dims.padLength
 
           // Draw start pad
           graphics.rects!.push({
@@ -397,11 +418,11 @@ export class JumperHighDensitySolver extends BaseSolver {
             layer: "jumper",
           })
 
-          // Draw connecting line
+          // Draw connecting line (jumper body)
           graphics.lines!.push({
             points: [jumper.start, jumper.end],
             strokeColor: "rgba(100, 100, 100, 0.8)",
-            strokeWidth: padWidth * 0.3,
+            strokeWidth: dims.padWidth * 0.3,
             layer: "jumper-body",
           })
         }
