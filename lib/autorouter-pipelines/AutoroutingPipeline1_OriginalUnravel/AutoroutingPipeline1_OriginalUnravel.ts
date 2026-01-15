@@ -53,6 +53,7 @@ import { getGlobalInMemoryCache } from "lib/cache/setupGlobalCaches"
 import { NetToPointPairsSolver2_OffBoardConnection } from "lib/solvers/NetToPointPairsSolver2_OffBoardConnection/NetToPointPairsSolver2_OffBoardConnection"
 import { RectDiffPipeline } from "@tscircuit/rectdiff"
 import { TraceSimplificationSolver } from "lib/solvers/TraceSimplificationSolver/TraceSimplificationSolver"
+import { NoOffBoardMultipleHighDensityRouteStitchSolver } from "lib/solvers/RouteStitchingSolver/NoOffBoardMultipleHighDensityRouteStitchSolver"
 
 interface CapacityMeshSolverOptions {
   capacityDepth?: number
@@ -93,7 +94,7 @@ function definePipelineStep<
 
 export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
   netToPointPairsSolver?: NetToPointPairsSolver
-  nodeSolver?: RectDiffPipeline
+  nodeSolver?: CapacityMeshNodeSolver
   nodeTargetMerger?: CapacityNodeTargetMerger
   edgeSolver?: CapacityMeshEdgeSolver
   initialPathingSolver?: CapacityPathingGreedySolver
@@ -104,7 +105,7 @@ export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
   unravelMultiSectionSolver?: UnravelMultiSectionSolver
   segmentToPointOptimizer?: CapacitySegmentPointOptimizer
   highDensityRouteSolver?: HighDensitySolver
-  highDensityStitchSolver?: MultipleHighDensityRouteStitchSolver
+  highDensityStitchSolver?: NoOffBoardMultipleHighDensityRouteStitchSolver
   singleLayerNodeMerger?: SingleLayerNodeMergerSolver
   strawSolver?: StrawSolver
   deadEndSolver?: DeadEndSolver
@@ -142,13 +143,14 @@ export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
     ),
     definePipelineStep(
       "nodeSolver",
-      RectDiffPipeline,
-      // Cast to any because RectDiffSolver uses an older SimpleRouteJson type
-      // that doesn't support MultiLayerConnectionPoint yet
-      (cms) => [{ simpleRouteJson: cms.srjWithPointPairs! as any }],
+      CapacityMeshNodeSolver2_NodeUnderObstacle,
+      (cms) => [
+        cms.netToPointPairsSolver?.getNewSimpleRouteJson() || cms.srj,
+        cms.opts,
+      ],
       {
         onSolved: (cms) => {
-          cms.capacityNodes = cms.nodeSolver?.getOutput().meshNodes ?? []
+          cms.capacityNodes = cms.nodeSolver?.finishedNodes!
         },
       },
     ),
@@ -165,9 +167,19 @@ export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
     //   cms.srj.connections,
     // ]),
     definePipelineStep(
+      "singleLayerNodeMerger",
+      SingleLayerNodeMergerSolver,
+      (cms) => [cms.nodeSolver?.finishedNodes!],
+      {
+        onSolved: (cms) => {
+          cms.capacityNodes = cms.singleLayerNodeMerger?.newNodes!
+        },
+      },
+    ),
+    definePipelineStep(
       "strawSolver",
       StrawSolver,
-      (cms) => [{ nodes: cms.capacityNodes! }],
+      (cms) => [{ nodes: cms.singleLayerNodeMerger?.newNodes! }],
       {
         onSolved: (cms) => {
           cms.capacityNodes = cms.strawSolver?.getResultNodes()!
@@ -304,7 +316,7 @@ export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
     ]),
     definePipelineStep(
       "highDensityStitchSolver",
-      MultipleHighDensityRouteStitchSolver,
+      NoOffBoardMultipleHighDensityRouteStitchSolver,
       (cms) => [
         {
           connections: cms.srjWithPointPairs!.connections,
@@ -327,7 +339,6 @@ export class AutoroutingPipeline1_OriginalUnravel extends BaseSolver {
           outline: cms.srj.outline,
           defaultViaDiameter: cms.viaDiameter,
           layerCount: cms.srj.layerCount,
-          iterations: 2,
         },
       ],
     ),
