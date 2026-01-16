@@ -15,15 +15,27 @@ export const redistributePortPointsOnSide = ({
 
   const portsByZ = new Map<number, PortPointWithSide[]>()
   for (const port of portPoints) {
-    const existing = portsByZ.get(port.z) ?? []
+    const z = port.z ?? 0
+    const existing = portsByZ.get(z) ?? []
     existing.push(port)
-    portsByZ.set(port.z, existing)
+    portsByZ.set(z, existing)
   }
 
   const redistributed: PortPointWithSide[] = []
+  const zLayers = Array.from(portsByZ.keys()).sort((a, b) => a - b)
 
-  for (const [_z, portsOnZ] of portsByZ) {
+  for (const z of zLayers) {
+    const portsOnZ = portsByZ.get(z)!
     const count = portsOnZ.length
+
+    // Sort ports by their original position to maintain relative order and prevent crossings
+    portsOnZ.sort((a, b) => {
+      if (side === "top" || side === "bottom") {
+        return a.x - b.x
+      }
+      return a.y - b.y
+    })
+
     for (let i = 0; i < count; i++) {
       const fraction = (2 * i + 1) / (2 * count)
       let x = 0,
