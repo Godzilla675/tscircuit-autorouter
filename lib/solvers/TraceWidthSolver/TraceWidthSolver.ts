@@ -26,7 +26,7 @@ export interface TraceWidthSolverInput {
   nominalTraceWidth?: number
   minTraceWidth: number
   obstacleMargin?: number
-  traceThickness?: number
+  defaultTraceThickness?: number
   traceThicknessMultiplier?: number
 }
 
