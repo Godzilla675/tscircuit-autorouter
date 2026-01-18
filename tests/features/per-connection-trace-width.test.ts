@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test"
-import { AutoroutingPipelineSolver2_PortPointPathing as CapacityMeshSolver } from "lib/autorouter-pipelines/AutoroutingPipeline2_PortPointPathing/AutoroutingPipelineSolver2_PortPointPathing"
+import { AutoroutingPipelineSolver2_PortPointPathing } from "lib/autorouter-pipelines/AutoroutingPipeline2_PortPointPathing/AutoroutingPipelineSolver2_PortPointPathing"
 import type { SimpleRouteJson, SimpleRouteConnection } from "lib/types"
 
 /**
@@ -41,7 +41,7 @@ test("per-connection trace width - propagates nominalTraceWidth through pipeline
     bounds: { minX: -2, maxX: 8, minY: -2, maxY: 6 },
   }
 
-  const solver = new CapacityMeshSolver(srj)
+  const solver = new AutoroutingPipelineSolver2_PortPointPathing(srj)
   solver.solve()
 
   expect(solver.solved).toBe(true)
@@ -58,24 +58,32 @@ test("per-connection trace width - propagates nominalTraceWidth through pipeline
   expect(powerTrace).toBeDefined()
 
   // Check that wire segments have the correct width
-  const dataWires = dataTrace!.route.filter((r) => r.route_type === "wire")
-  const powerWires = powerTrace!.route.filter((r) => r.route_type === "wire")
+  const dataWires = dataTrace!.route.filter((r) => r.route_type === "wire") as Array<{
+    route_type: "wire"
+    x: number
+    y: number
+    width: number
+    layer: string
+  }>
+  const powerWires = powerTrace!.route.filter((r) => r.route_type === "wire") as Array<{
+    route_type: "wire"
+    x: number
+    y: number
+    width: number
+    layer: string
+  }>
 
   expect(dataWires.length).toBeGreaterThan(0)
   expect(powerWires.length).toBeGreaterThan(0)
 
   // Data trace should use minimum trace width (0.15mm)
   for (const wire of dataWires) {
-    if (wire.route_type === "wire") {
-      expect(wire.width).toBe(minTraceWidth)
-    }
+    expect(wire.width).toBe(minTraceWidth)
   }
 
   // Power trace should use 2x trace width (0.3mm)
   for (const wire of powerWires) {
-    if (wire.route_type === "wire") {
-      expect(wire.width).toBe(0.3)
-    }
+    expect(wire.width).toBe(0.3)
   }
 })
 
@@ -107,7 +115,7 @@ test("per-connection trace width - 4x and 8x multiples", () => {
     bounds: { minX: -2, maxX: 15, minY: -2, maxY: 10 },
   }
 
-  const solver = new CapacityMeshSolver(srj)
+  const solver = new AutoroutingPipelineSolver2_PortPointPathing(srj)
   solver.solve()
 
   expect(solver.solved).toBe(true)
@@ -122,20 +130,22 @@ test("per-connection trace width - 4x and 8x multiples", () => {
   expect(trace4x).toBeDefined()
   expect(trace8x).toBeDefined()
 
-  // Verify widths
-  const wires4x = trace4x!.route.filter((r) => r.route_type === "wire")
-  const wires8x = trace8x!.route.filter((r) => r.route_type === "wire")
+  // Verify widths - type assertion for wire segments
+  const wires4x = trace4x!.route.filter((r) => r.route_type === "wire") as Array<{
+    route_type: "wire"
+    width: number
+  }>
+  const wires8x = trace8x!.route.filter((r) => r.route_type === "wire") as Array<{
+    route_type: "wire"
+    width: number
+  }>
 
   for (const wire of wires4x) {
-    if (wire.route_type === "wire") {
-      expect(wire.width).toBe(0.6)
-    }
+    expect(wire.width).toBe(0.6)
   }
 
   for (const wire of wires8x) {
-    if (wire.route_type === "wire") {
-      expect(wire.width).toBe(1.2)
-    }
+    expect(wire.width).toBe(1.2)
   }
 })
 
@@ -168,7 +178,7 @@ test("per-connection trace width - merged connections preserve trace width", () 
     bounds: { minX: -2, maxX: 15, minY: -2, maxY: 5 },
   }
 
-  const solver = new CapacityMeshSolver(srj)
+  const solver = new AutoroutingPipelineSolver2_PortPointPathing(srj)
   solver.solve()
 
   expect(solver.solved).toBe(true)
@@ -178,12 +188,13 @@ test("per-connection trace width - merged connections preserve trace width", () 
 
   // All wires in the merged connection should have the same trace width
   for (const trace of output) {
-    const wires = trace.route.filter((r) => r.route_type === "wire")
+    const wires = trace.route.filter((r) => r.route_type === "wire") as Array<{
+      route_type: "wire"
+      width: number
+    }>
     for (const wire of wires) {
-      if (wire.route_type === "wire") {
-        // The merged connection should preserve the nominalTraceWidth
-        expect(wire.width).toBe(0.3)
-      }
+      // The merged connection should preserve the nominalTraceWidth
+      expect(wire.width).toBe(0.3)
     }
   }
 })

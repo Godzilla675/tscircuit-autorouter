@@ -286,7 +286,10 @@ export class MultiHeadPolyLineIntraNodeSolver extends BaseSolver {
           z1: portPoint.z ?? 0,
           z2: portPoint.z ?? 0,
         }
-        // Use the first non-undefined trace width found for this connection
+        // Use the first non-undefined trace width found for this connection.
+        // All port points of a connection should have the same trace width
+        // (set at the connection level via nominalTraceWidth), so this is
+        // just picking the first defined value.
         if (existing.traceWidth === undefined && portPoint.traceWidth !== undefined) {
           existing.traceWidth = portPoint.traceWidth
         }
