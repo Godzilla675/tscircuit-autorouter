@@ -76,7 +76,46 @@ interface Obstacle {
 interface SimpleRouteConnection {
   name: string
   pointsToConnect: Array<{ x: number; y: number; layer: string }>
+  nominalTraceWidth?: number // Optional: Per-connection trace width
 }
+```
+
+### Per-Connection Trace Width
+
+You can specify a custom trace width for individual connections using the `nominalTraceWidth` property. This is useful for power traces that need thicker widths (e.g., 2x, 4x, 8x multiples of the standard data line thickness):
+
+```typescript
+const simpleRouteJson: SimpleRouteJson = {
+  layerCount: 2,
+  minTraceWidth: 0.15, // Standard 0.15mm for data lines
+  obstacles: [],
+  connections: [
+    {
+      name: "data_signal",
+      // Uses minTraceWidth (0.15mm) since nominalTraceWidth is not specified
+      pointsToConnect: [
+        { x: 0, y: 0, layer: "top" },
+        { x: 10, y: 0, layer: "top" },
+      ],
+    },
+    {
+      name: "power_vcc",
+      nominalTraceWidth: 0.6, // 4x minimum trace width for power
+      pointsToConnect: [
+        { x: 0, y: 5, layer: "top" },
+        { x: 10, y: 5, layer: "top" },
+      ],
+    },
+  ],
+  bounds: { minX: -2, maxX: 15, minY: -2, maxY: 10 },
+}
+```
+
+Supported trace width multiples:
+- **1x** (0.15mm) - Standard data lines (default)
+- **2x** (0.30mm) - Light power traces
+- **4x** (0.60mm) - Medium power traces
+- **8x** (1.20mm) - Heavy power traces
 ```
 
 ### Output Format
