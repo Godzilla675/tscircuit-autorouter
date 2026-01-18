@@ -26,6 +26,8 @@ export interface TraceWidthSolverInput {
   nominalTraceWidth?: number
   minTraceWidth: number
   obstacleMargin?: number
+  traceThickness?: number
+  traceThicknessMultiplier?: number
 }
 
 /**
@@ -37,7 +39,7 @@ export interface TraceWidthSolverInput {
  * If clearance is insufficient for the current width, it tries the next
  * narrower width in the schedule.
  *
- * nominalTraceWidth defaults to minTraceWidth * 2 if not specified.
+ * nominalTraceWidth defaults to minTraceWidth * traceThicknessMultiplier (default 2).
  */
 export class TraceWidthSolver extends BaseSolver {
   hdRoutes: HighDensityRoute[]
@@ -45,6 +47,7 @@ export class TraceWidthSolver extends BaseSolver {
 
   nominalTraceWidth: number
   minTraceWidth: number
+  defaultTraceThickness: number
   obstacleMargin: number
   TRACE_WIDTH_SCHEDULE: number[]
 
@@ -77,7 +80,11 @@ export class TraceWidthSolver extends BaseSolver {
 
     this.hdRoutes = [...input.hdRoutes]
     this.minTraceWidth = input.minTraceWidth
-    this.nominalTraceWidth = input.nominalTraceWidth ?? input.minTraceWidth * 2
+    this.defaultTraceThickness = input.traceThickness ?? this.minTraceWidth
+    const traceThicknessMultiplier = input.traceThicknessMultiplier ?? 2
+    this.nominalTraceWidth =
+      input.nominalTraceWidth ??
+      this.minTraceWidth * traceThicknessMultiplier
     this.obstacleMargin = input.obstacleMargin ?? 0.15
 
     // Build the width schedule: [nominal, mid]
@@ -377,7 +384,8 @@ export class TraceWidthSolver extends BaseSolver {
         continue
       }
 
-      const otherTraceHalfWidth = (conflictingRoute.traceThickness ?? 0.15) / 2
+      const otherTraceHalfWidth =
+        (conflictingRoute.traceThickness ?? this.defaultTraceThickness) / 2
       const clearance = distance - otherTraceHalfWidth
 
       // Track routes that would violate clearance (width/2 + margin)
