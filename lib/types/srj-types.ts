@@ -38,7 +38,7 @@ export interface SimpleRouteJson {
   layerCount: number
   minTraceWidth: number
   nominalTraceWidth?: number
-  traceThickness?: number
+  defaultTraceThickness?: number
   traceThicknessMultiplier?: number
   minViaDiameter?: number
   defaultObstacleMargin?: number
