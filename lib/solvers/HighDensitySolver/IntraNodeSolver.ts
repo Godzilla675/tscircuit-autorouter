@@ -19,6 +19,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
   unsolvedConnections: {
     connectionName: string
     points: { x: number; y: number; z: number }[]
+    traceWidth?: number
   }[]
 
   totalConnections: number
@@ -62,18 +63,26 @@ export class IntraNodeRouteSolver extends BaseSolver {
     this.traceWidth = params.traceWidth ?? 0.15
     const unsolvedConnectionsMap: Map<
       string,
-      { x: number; y: number; z: number }[]
+      { points: { x: number; y: number; z: number }[]; traceWidth?: number }
     > = new Map()
-    for (const { connectionName, x, y, z } of nodeWithPortPoints.portPoints) {
-      unsolvedConnectionsMap.set(connectionName, [
-        ...(unsolvedConnectionsMap.get(connectionName) ?? []),
-        { x, y, z: z ?? 0 },
-      ])
+    for (const portPoint of nodeWithPortPoints.portPoints) {
+      const { connectionName, x, y, z, traceWidth } = portPoint
+      const existing = unsolvedConnectionsMap.get(connectionName) ?? {
+        points: [],
+        traceWidth: undefined,
+      }
+      existing.points.push({ x, y, z: z ?? 0 })
+      // Use the first non-undefined trace width found for this connection
+      if (existing.traceWidth === undefined && traceWidth !== undefined) {
+        existing.traceWidth = traceWidth
+      }
+      unsolvedConnectionsMap.set(connectionName, existing)
     }
     this.unsolvedConnections = Array.from(
-      unsolvedConnectionsMap.entries().map(([connectionName, points]) => ({
+      unsolvedConnectionsMap.entries().map(([connectionName, data]) => ({
         connectionName,
-        points,
+        points: data.points,
+        traceWidth: data.traceWidth,
       })),
     )
 
@@ -203,7 +212,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
 
         this.solvedRoutes.push({
           connectionName: unsolvedConnection.connectionName,
-          traceThickness: this.traceWidth,
+          traceThickness: unsolvedConnection.traceWidth ?? this.traceWidth,
           viaDiameter: this.viaDiameter,
           route,
           vias: [viaPoint],
@@ -211,7 +220,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
         return
       }
     }
-    const { connectionName, points } = unsolvedConnection
+    const { connectionName, points, traceWidth: connectionTraceWidth } = unsolvedConnection
     this.activeSubSolver =
       new SingleHighDensityRouteSolver6_VertHorzLayer_FutureCost({
         connectionName,
@@ -240,7 +249,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
         hyperParameters: this.hyperParameters,
         connMap: this.connMap,
         viaDiameter: this.viaDiameter,
-        traceThickness: this.traceWidth,
+        traceThickness: connectionTraceWidth ?? this.traceWidth,
       })
   }
 

@@ -5,6 +5,11 @@ export type PortPoint = {
   x: number
   y: number
   z: number
+  /**
+   * Per-connection trace width. If specified, this overrides the global trace width
+   * for this connection. Useful for power traces that need thicker widths (e.g., 2x, 4x, 8x).
+   */
+  traceWidth?: number
 }
 
 export type NodeWithPortPoints = {

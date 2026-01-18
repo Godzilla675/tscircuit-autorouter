@@ -13,6 +13,10 @@ export interface PolyLine {
   start: MHPoint
   end: MHPoint
   mPoints: MHPoint[]
+  /**
+   * Per-connection trace width. If specified, this overrides the global trace width.
+   */
+  traceWidth?: number
 }
 
 export interface Candidate {

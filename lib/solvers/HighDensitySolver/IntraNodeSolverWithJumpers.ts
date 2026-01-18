@@ -38,6 +38,7 @@ export class IntraNodeSolverWithJumpers extends BaseSolver {
     connectionName: string
     rootConnectionName?: string
     points: { x: number; y: number; z: number }[]
+    traceWidth?: number
   }[]
 
   totalConnections: number
@@ -83,30 +84,30 @@ export class IntraNodeSolverWithJumpers extends BaseSolver {
       {
         rootConnectionName?: string
         points: { x: number; y: number; z: number }[]
+        traceWidth?: number
       }
     > = new Map()
 
     // For single-layer, force all port points to z=0
-    for (const {
-      connectionName,
-      rootConnectionName,
-      x,
-      y,
-    } of nodeWithPortPoints.portPoints) {
+    for (const portPoint of nodeWithPortPoints.portPoints) {
+      const { connectionName, rootConnectionName, x, y, traceWidth } = portPoint
       const existing = unsolvedConnectionsMap.get(connectionName)
       unsolvedConnectionsMap.set(connectionName, {
         rootConnectionName: existing?.rootConnectionName ?? rootConnectionName,
         points: [...(existing?.points ?? []), { x, y, z: 0 }],
+        // Use the first non-undefined trace width found for this connection
+        traceWidth: existing?.traceWidth ?? traceWidth,
       })
     }
 
     this.unsolvedConnections = Array.from(
       unsolvedConnectionsMap
         .entries()
-        .map(([connectionName, { rootConnectionName, points }]) => ({
+        .map(([connectionName, { rootConnectionName, points, traceWidth }]) => ({
           connectionName,
           rootConnectionName,
           points,
+          traceWidth,
         })),
     )
 
@@ -190,7 +191,7 @@ export class IntraNodeSolverWithJumpers extends BaseSolver {
       }
     }
 
-    const { connectionName, rootConnectionName, points } = unsolvedConnection
+    const { connectionName, rootConnectionName, points, traceWidth: connectionTraceWidth } = unsolvedConnection
     this.activeSubSolver = new SingleHighDensityRouteWithJumpersSolver({
       connectionName,
       rootConnectionName,
@@ -219,7 +220,7 @@ export class IntraNodeSolverWithJumpers extends BaseSolver {
       futureConnections: this.unsolvedConnections,
       hyperParameters: this.hyperParameters,
       connMap: this.connMap,
-      traceThickness: this.traceWidth,
+      traceThickness: connectionTraceWidth ?? this.traceWidth,
     })
   }
 

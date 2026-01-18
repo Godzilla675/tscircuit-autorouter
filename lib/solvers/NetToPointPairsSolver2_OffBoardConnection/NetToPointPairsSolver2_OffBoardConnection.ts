@@ -178,6 +178,7 @@ export class NetToPointPairsSolver2_OffBoardConnection extends NetToPointPairsSo
         rootConnectionName: currentConnection.name,
         mergedConnectionNames: currentConnection.mergedConnectionNames,
         netConnectionName: currentConnection.netConnectionName,
+        nominalTraceWidth: currentConnection.nominalTraceWidth,
       })
     }
   }

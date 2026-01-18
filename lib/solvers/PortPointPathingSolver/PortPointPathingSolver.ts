@@ -1094,6 +1094,7 @@ export class PortPointPathingSolver extends BaseSolver {
     path: PortPointCandidate[],
     connectionName: string,
     rootConnectionName?: string,
+    traceWidth?: number,
   ): PortPoint[] {
     const assignedPortPoints: PortPoint[] = []
 
@@ -1114,6 +1115,7 @@ export class PortPointPathingSolver extends BaseSolver {
             z: candidate.z,
             connectionName,
             rootConnectionName,
+            traceWidth,
           }
 
           assignedPortPoints.push(portPoint)
@@ -1145,6 +1147,7 @@ export class PortPointPathingSolver extends BaseSolver {
         z: pp.z,
         connectionName,
         rootConnectionName,
+        traceWidth,
       }
 
       assignedPortPoints.push(portPoint)
@@ -1202,6 +1205,7 @@ export class PortPointPathingSolver extends BaseSolver {
         z: startCandidate.z,
         connectionName: connection.name,
         rootConnectionName: connection.rootConnectionName,
+        traceWidth: connection.nominalTraceWidth,
       })
       this.nodeAssignedPortPoints.set(
         startCandidate.currentNodeId,
@@ -1218,6 +1222,7 @@ export class PortPointPathingSolver extends BaseSolver {
         z: endCandidate.z,
         connectionName: connection.name,
         rootConnectionName: connection.rootConnectionName,
+        traceWidth: connection.nominalTraceWidth,
       })
       this.nodeAssignedPortPoints.set(endCandidate.currentNodeId, endPortPoints)
     }
@@ -1448,6 +1453,7 @@ export class PortPointPathingSolver extends BaseSolver {
         path,
         connectionName,
         rootConnectionName,
+        nextConnection.connection.nominalTraceWidth,
       )
 
       // Add target points to nodes for crossing calculations

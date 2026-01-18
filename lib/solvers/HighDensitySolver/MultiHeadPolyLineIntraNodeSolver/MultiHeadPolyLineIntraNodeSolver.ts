@@ -264,7 +264,10 @@ export class MultiHeadPolyLineIntraNodeSolver extends BaseSolver {
    * neighbors we never consider changing layers
    */
   setupInitialPolyLines() {
-    const portPairs: Map<string, { start: MHPoint; end: MHPoint }> = new Map()
+    const portPairs: Map<
+      string,
+      { start: MHPoint; end: MHPoint; traceWidth?: number }
+    > = new Map()
     this.nodeWithPortPoints.portPoints.forEach((portPoint) => {
       if (!portPairs.has(portPoint.connectionName)) {
         portPairs.set(portPoint.connectionName, {
@@ -274,12 +277,18 @@ export class MultiHeadPolyLineIntraNodeSolver extends BaseSolver {
             z2: portPoint.z ?? 0,
           },
           end: null as any,
+          traceWidth: portPoint.traceWidth,
         })
       } else {
-        portPairs.get(portPoint.connectionName)!.end = {
+        const existing = portPairs.get(portPoint.connectionName)!
+        existing.end = {
           ...portPoint,
           z1: portPoint.z ?? 0,
           z2: portPoint.z ?? 0,
+        }
+        // Use the first non-undefined trace width found for this connection
+        if (existing.traceWidth === undefined && portPoint.traceWidth !== undefined) {
+          existing.traceWidth = portPoint.traceWidth
         }
       }
     })
@@ -360,6 +369,7 @@ export class MultiHeadPolyLineIntraNodeSolver extends BaseSolver {
           start: portPair.start,
           end: portPair.end,
           mPoints: middlePoints,
+          traceWidth: portPair.traceWidth,
         })
       }
       const hasClosedSameLayerFace =
@@ -1354,7 +1364,7 @@ export class MultiHeadPolyLineIntraNodeSolver extends BaseSolver {
 
       solvedRoutes.push({
         connectionName: polyLine.connectionName,
-        traceThickness: this.traceWidth,
+        traceThickness: polyLine.traceWidth ?? this.traceWidth,
         viaDiameter: this.viaDiameter,
         route: routePoints,
         vias: vias,

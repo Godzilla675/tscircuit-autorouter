@@ -163,7 +163,7 @@ export class CurvyIntraNodeSolver extends BaseSolver {
     // We use connectionName as networkId to keep different MST connections separate
     const connectionInfo = new Map<
       string,
-      { connectionName: string; rootConnectionName?: string; z: number }
+      { connectionName: string; rootConnectionName?: string; z: number; traceWidth?: number }
     >()
     for (const pt of node.portPoints) {
       // Use connectionName as networkId (matching waypointPairs above)
@@ -173,6 +173,7 @@ export class CurvyIntraNodeSolver extends BaseSolver {
           connectionName: pt.connectionName,
           rootConnectionName: pt.rootConnectionName,
           z: pt.z,
+          traceWidth: pt.traceWidth,
         })
       }
     }
@@ -186,7 +187,7 @@ export class CurvyIntraNodeSolver extends BaseSolver {
       const route: HighDensityIntraNodeRoute = {
         connectionName: info.connectionName,
         rootConnectionName: info.rootConnectionName,
-        traceThickness: this.traceWidth,
+        traceThickness: info.traceWidth ?? this.traceWidth,
         viaDiameter: this.viaDiameter,
         route: outputTrace.points.map((pt) => ({
           x: pt.x,
