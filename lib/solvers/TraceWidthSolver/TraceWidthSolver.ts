@@ -1,6 +1,6 @@
 import { BaseSolver } from "../BaseSolver"
 import { HighDensityRoute } from "lib/types/high-density-types"
-import { Obstacle } from "lib/types"
+import { Obstacle, SimpleRouteConnection } from "lib/types"
 import { ConnectivityMap } from "circuit-json-to-connectivity-map"
 import { ObstacleSpatialHashIndex } from "lib/data-structures/ObstacleTree"
 import { HighDensityRouteSpatialIndex } from "lib/data-structures/HighDensityRouteSpatialIndex"
@@ -21,6 +21,7 @@ interface Point3D extends Point2D {
 export interface TraceWidthSolverInput {
   hdRoutes: HighDensityRoute[]
   obstacles?: Obstacle[]
+  connections?: SimpleRouteConnection[]
   connMap?: ConnectivityMap
   colorMap?: Record<string, string>
   nominalTraceWidth?: number
@@ -46,7 +47,9 @@ export class TraceWidthSolver extends BaseSolver {
   nominalTraceWidth: number
   minTraceWidth: number
   obstacleMargin: number
-  TRACE_WIDTH_SCHEDULE: number[]
+  TRACE_WIDTH_SCHEDULE: number[] = []
+
+  connectionsMap: Map<string, SimpleRouteConnection> = new Map()
 
   unprocessedRoutes: HighDensityRoute[] = []
   processedRoutes: HighDensityRoute[] = []
@@ -80,10 +83,11 @@ export class TraceWidthSolver extends BaseSolver {
     this.nominalTraceWidth = input.nominalTraceWidth ?? input.minTraceWidth * 2
     this.obstacleMargin = input.obstacleMargin ?? 0.15
 
-    // Build the width schedule: [nominal, mid]
-    // minTraceWidth is not in schedule - it's the fallback when all schedule options fail
-    const midWidth = (this.nominalTraceWidth + this.minTraceWidth) / 2
-    this.TRACE_WIDTH_SCHEDULE = [this.nominalTraceWidth, midWidth]
+    if (input.connections) {
+      for (const conn of input.connections) {
+        this.connectionsMap.set(conn.name, conn)
+      }
+    }
 
     this.unprocessedRoutes = [...this.hdRoutes]
     this.connMap = input.connMap
@@ -114,6 +118,10 @@ export class TraceWidthSolver extends BaseSolver {
 
       // Initialize the new trace processing
       this.currentTrace = nextTrace
+
+      // Determine schedule for this trace
+      this.TRACE_WIDTH_SCHEDULE = this.getScheduleForTrace(this.currentTrace)
+
       if (this.currentTrace.route.length < 2) {
         // Trace is too short to process, just pass it through with minTraceWidth
         this.processedRoutes.push({
@@ -126,8 +134,13 @@ export class TraceWidthSolver extends BaseSolver {
 
       // Start with the widest width in the schedule
       this.currentScheduleIndex = 0
-      this.currentTargetWidth = this.TRACE_WIDTH_SCHEDULE[0]!
-      this.initializeCursor()
+      if (this.TRACE_WIDTH_SCHEDULE.length > 0) {
+        this.currentTargetWidth = this.TRACE_WIDTH_SCHEDULE[0]!
+        this.initializeCursor()
+      } else {
+        // If schedule is empty, fallback immediately
+        this.finalizeCurrentTrace(this.minTraceWidth)
+      }
       return
     }
 
@@ -161,6 +174,39 @@ export class TraceWidthSolver extends BaseSolver {
         this.finalizeCurrentTrace(this.minTraceWidth)
       }
     }
+  }
+
+  private getScheduleForTrace(trace: HighDensityRoute): number[] {
+    const connName = trace.connectionName
+    const rootName = trace.rootConnectionName
+
+    let nominalWidth = this.nominalTraceWidth
+
+    // Try to find specific nominal width
+    const conn =
+      this.connectionsMap.get(connName) ||
+      (rootName ? this.connectionsMap.get(rootName) : undefined)
+
+    if (conn && conn.nominalTraceWidth) {
+      nominalWidth = conn.nominalTraceWidth
+    }
+
+    const schedule: number[] = []
+    let currentWidth = nominalWidth
+
+    // Generate powers of 2 (or halves) until we hit minTraceWidth
+    // Ensure we don't go below minTraceWidth (excluding the fallback which is handled separately)
+    while (currentWidth > this.minTraceWidth * 1.01) {
+      schedule.push(currentWidth)
+      currentWidth /= 2
+    }
+
+    // If schedule is empty (nominal <= min), ensure we at least try nominal if it is >= min
+    if (schedule.length === 0 && nominalWidth >= this.minTraceWidth) {
+      schedule.push(nominalWidth)
+    }
+
+    return schedule
   }
 
   /**
@@ -281,7 +327,7 @@ export class TraceWidthSolver extends BaseSolver {
 
     const rootConnectionName =
       this.currentTrace.rootConnectionName ?? this.currentTrace.connectionName
-    const searchRadius = this.nominalTraceWidth * 2
+    const searchRadius = Math.max(this.nominalTraceWidth, this.currentTargetWidth) * 3
     let minClearance = Infinity
 
     // Reset colliding objects for visualization
@@ -481,13 +527,24 @@ export class TraceWidthSolver extends BaseSolver {
     for (const route of this.processedRoutes) {
       if (route.route.length === 0) continue
 
-      const isNominalWidth = route.traceThickness === this.nominalTraceWidth
-      const isMidWidth = route.traceThickness === this.TRACE_WIDTH_SCHEDULE[1]
+      let nominalForThisRoute = this.nominalTraceWidth
+      const conn =
+        this.connectionsMap.get(route.connectionName) ||
+        (route.rootConnectionName
+          ? this.connectionsMap.get(route.rootConnectionName)
+          : undefined)
+      if (conn && conn.nominalTraceWidth)
+        nominalForThisRoute = conn.nominalTraceWidth
+
+      const isNominalWidth =
+        Math.abs(route.traceThickness - nominalForThisRoute) < 0.001
+      const isMinWidth =
+        Math.abs(route.traceThickness - this.minTraceWidth) < 0.001
       const strokeColor = isNominalWidth
         ? "green"
-        : isMidWidth
-          ? "yellow"
-          : "orange"
+        : isMinWidth
+          ? "orange"
+          : "yellow"
 
       for (let i = 0; i < route.route.length - 1; i++) {
         const current = route.route[i]!

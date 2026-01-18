@@ -426,6 +426,7 @@ export class AssignableAutoroutingPipeline3 extends BaseSolver {
     //         (jumper) => jumper.pads,
     //       ),
     //     ] as Obstacle[],
+    //     connections: cms.srj.connections,
     //     connMap: cms.connMap,
     //     colorMap: cms.colorMap,
     //     nominalTraceWidth: cms.srj.nominalTraceWidth,
