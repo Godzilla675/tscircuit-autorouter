@@ -16,7 +16,7 @@ test("TraceWidthSolver - uses thickness multiplier for nominal width", () => {
       },
     ],
     minTraceWidth: 0.15,
-    traceThickness: 0.15,
+    defaultTraceThickness: 0.15,
     traceThicknessMultiplier: 4,
   })
 
