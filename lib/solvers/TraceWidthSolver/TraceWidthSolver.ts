@@ -39,7 +39,7 @@ export interface TraceWidthSolverInput {
  * If clearance is insufficient for the current width, it tries the next
  * narrower width in the schedule.
  *
- * nominalTraceWidth defaults to minTraceWidth * traceThicknessMultiplier (default 2).
+ * nominalTraceWidth defaults to minTraceWidth * traceThicknessMultiplier, where traceThicknessMultiplier defaults to 2 if not specified.
  */
 export class TraceWidthSolver extends BaseSolver {
   hdRoutes: HighDensityRoute[]
