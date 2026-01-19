@@ -104,11 +104,17 @@ test("trace thickness multiplier 8x snapshot", async () => {
 
   expect(solver.failed).toBe(false)
 
-  const srjWithPointPairs = solver.netToPointPairsSolver?.getNewSimpleRouteJson() || solver.srjWithPointPairs
+  const srjWithPointPairs =
+    solver.netToPointPairsSolver?.getNewSimpleRouteJson() ||
+    solver.srjWithPointPairs
   if (!srjWithPointPairs) throw new Error("No srjWithPointPairs")
 
   const routes = solver.getOutputSimplifiedPcbTraces()
-  const circuitJson = convertToCircuitJson(srjWithPointPairs, routes, srj.minTraceWidth)
+  const circuitJson = convertToCircuitJson(
+    srjWithPointPairs,
+    routes,
+    srj.minTraceWidth,
+  )
   const svg = convertCircuitJsonToPcbSvg(circuitJson)
 
   await expect(svg).toMatchSvgSnapshot(import.meta.path)
