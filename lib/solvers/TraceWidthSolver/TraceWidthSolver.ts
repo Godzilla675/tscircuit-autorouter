@@ -80,7 +80,7 @@ export class TraceWidthSolver extends BaseSolver {
 
     this.hdRoutes = [...input.hdRoutes]
     this.minTraceWidth = input.minTraceWidth
-    this.defaultTraceThickness = input.traceThickness ?? this.minTraceWidth
+    this.defaultTraceThickness = input.defaultTraceThickness ?? this.minTraceWidth
     const traceThicknessMultiplier = input.traceThicknessMultiplier ?? 2
     this.nominalTraceWidth =
       input.nominalTraceWidth ??
