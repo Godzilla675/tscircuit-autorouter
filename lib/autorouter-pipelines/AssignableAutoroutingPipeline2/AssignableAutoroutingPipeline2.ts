@@ -383,7 +383,7 @@ export class AssignableAutoroutingPipeline2 extends BaseSolver {
         nominalTraceWidth: cms.srj.nominalTraceWidth,
         minTraceWidth: cms.minTraceWidth,
         obstacleMargin: cms.srj.defaultObstacleMargin ?? 0.15,
-        traceThickness: cms.srj.traceThickness,
+        defaultTraceThickness: cms.srj.defaultTraceThickness,
         traceThicknessMultiplier: cms.srj.traceThicknessMultiplier,
       },
     ]),
