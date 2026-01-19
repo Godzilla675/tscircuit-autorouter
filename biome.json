@@ -12,6 +12,7 @@
       "cosmos-export",
       "dist",
       "package.json",
+      "fixtures/features/portpointpathing/portpointpathing01-input.json",
       "fixtures/legacy/assets/*.json",
       "fixtures/unassigned-obstacles/AssignableViaCapacityPathingSolver_DirectiveSubOptimal/AssignableViaCapacityPathingSolver_DirectiveSubOptimal01.json"
     ]
